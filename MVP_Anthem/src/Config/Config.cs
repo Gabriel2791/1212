@@ -13,7 +13,7 @@ public sealed class MVPConfig
                     "mvp_1", new MVP_Template
                     {
                         DisplayName = "mvp_1.name",
-                        Sound = "flawless.mp3",
+                        Sound = "Weapon_AK47.Single",
                         EnablePreview = true,
                         ShowHtml = true,
                         ShowChat = true,
@@ -24,7 +24,7 @@ public sealed class MVPConfig
                     "mvp_2", new MVP_Template
                     {
                         DisplayName = "mvp_2.name",
-                        Sound = "florinsalam.mp3",
+                        Sound = "Weapon_AWP.Single",
                         EnablePreview = true,
                         ShowHtml = true,
                         ShowChat = true,
@@ -57,7 +57,6 @@ public sealed class Menu_Settings
     public bool FreezePlayer { get; set; } = true;
     public bool EnableSounds { get; set; } = true;
     public bool GradientTitleColor { get; set; } = true;
-    public List<int> VolumeOptions { get; set; } = [0, 10, 20, 40, 60, 80, 100];
 }
 public sealed class MVP_Template
 {

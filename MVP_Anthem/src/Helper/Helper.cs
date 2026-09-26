@@ -1,4 +1,3 @@
-using AudioApi;
 using SwiftlyS2.Shared;
 using SwiftlyS2.Shared.Players;
 using SwiftlyS2.Shared.SchemaDefinitions;
@@ -118,9 +117,8 @@ public static class Helper
         return string.Empty;
     }
 
-    public static void PlaySound(IAudioApi audioApi, IPlayer player, string sound, float volume)
+    public static void PlaySound(IPlayer player, string sound, float volume)
     {
-        ArgumentNullException.ThrowIfNull(audioApi);
         ArgumentNullException.ThrowIfNull(player);
         if (!player.IsValid || player.IsFakeClient || ClampVolume(volume) <= 0f || string.IsNullOrWhiteSpace(sound))
             return;
@@ -132,13 +130,18 @@ public static class Helper
             if (generation != _generation || !player.IsValid)
                 return;
 
-            PlaySoundSingleInternal(audioApi, player, sound, clampedVolume);
+            using var soundEvent = new SoundEvent
+            {
+                Name = sound,
+                Volume = clampedVolume
+            };
+            soundEvent.Recipients.AddRecipient(player.PlayerID);
+            soundEvent.Emit();
         });
     }
 
-    public static void PlaySound(IAudioApi audioApi, IEnumerable<(IPlayer Player, float Volume)> listeners, string sound)
+    public static void PlaySound(IEnumerable<(IPlayer Player, float Volume)> listeners, string sound)
     {
-        ArgumentNullException.ThrowIfNull(audioApi);
         ArgumentNullException.ThrowIfNull(listeners);
         if (string.IsNullOrWhiteSpace(sound))
             return;
@@ -150,71 +153,19 @@ public static class Helper
         var generation = _generation;
         Core.Scheduler.NextWorldUpdate(() =>
         {
-            if (generation == _generation) PlaySoundManyInternal(audioApi, listenerArray, sound);
-        });
-    }
-
-    private static void PlaySoundSingleInternal(IAudioApi audioApi, IPlayer player, string sound, float clampedVolume)
-    {
-        if (sound.EndsWith(".mp3", StringComparison.OrdinalIgnoreCase))
-        {
-            var mp3Path = Path.IsPathRooted(sound) ? sound : Path.Combine(Core.PluginDataDirectory, sound);
-            if (!File.Exists(mp3Path))
-                return;
-
-            var channelController = audioApi.UseChannel($"mvp_anthem.preview.{player.PlayerID}");
-            var audioSource = audioApi.DecodeFromFile(mp3Path);
-            channelController.SetSource(audioSource);
-            channelController.SetVolume(player.PlayerID, clampedVolume);
-            channelController.Play(player.PlayerID);
-            return;
-        }
-
-        using var soundEvent = new SoundEvent
-        {
-            Name = sound,
-            Volume = clampedVolume
-        };
-        soundEvent.Recipients.AddRecipient(player.PlayerID);
-        soundEvent.Emit();
-    }
-
-    private static void PlaySoundManyInternal(IAudioApi audioApi, (IPlayer Player, float Volume)[] listeners, string sound)
-    {
-        var activeListeners = listeners.Where(static entry => entry.Player.IsValid && !entry.Player.IsFakeClient && ClampVolume(entry.Volume) > 0f).ToArray();
-        if (activeListeners.Length == 0)
-            return;
-
-        if (sound.EndsWith(".mp3", StringComparison.OrdinalIgnoreCase))
-        {
-            var mp3Path = Path.IsPathRooted(sound) ? sound : Path.Combine(Core.PluginDataDirectory, sound);
-            if (!File.Exists(mp3Path))
-                return;
-
-            var channelController = audioApi.UseChannel("mvp_anthem.round_mvp");
-            var audioSource = audioApi.DecodeFromFile(mp3Path);
-            channelController.SetSource(audioSource);
-
-            foreach (var (player, volume) in activeListeners)
+            if (generation != _generation) return;
+            foreach (var (player, volume) in listenerArray)
             {
-                channelController.SetVolume(player.PlayerID, ClampVolume(volume));
-                channelController.Play(player.PlayerID);
+                if (!player.IsValid || player.IsFakeClient || ClampVolume(volume) <= 0f) continue;
+                using var soundEvent = new SoundEvent
+                {
+                    Name = sound,
+                    Volume = ClampVolume(volume)
+                };
+                soundEvent.Recipients.AddRecipient(player.PlayerID);
+                soundEvent.Emit();
             }
-
-            return;
-        }
-
-        foreach (var (player, volume) in activeListeners)
-        {
-            using var soundEvent = new SoundEvent
-            {
-                Name = sound,
-                Volume = ClampVolume(volume)
-            };
-
-            soundEvent.Recipients.AddRecipient(player.PlayerID);
-            soundEvent.Emit();
-        }
+        });
     }
     public static void RemoveInGameMvp(IPlayer player)
     {

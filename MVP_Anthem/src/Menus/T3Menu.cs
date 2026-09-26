@@ -1,12 +1,12 @@
-using AudioApi;
 using SwiftlyS2.Shared;
 using SwiftlyS2.Shared.Players;
 using T3Menu.Contract;
 
 namespace MVP_Anthem;
 
-public sealed class T3MvpMenu(ISwiftlyCore core, MVPConfig config, MVPCookies cookies, IAudioApi audio, IT3Menu service)
-    : MvpMenuBase(core, config, cookies, audio)
+public sealed class T3MvpMenu(ISwiftlyCore core, MVPConfig config, MVPCookies cookies, IT3Menu service,
+    Func<IPlayer, float> getVolume)
+    : MvpMenuBase(core, config, cookies, getVolume)
 {
     private readonly Dictionary<int, List<Menu>> _menus = [];
 

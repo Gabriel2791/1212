@@ -1,4 +1,3 @@
-using AudioApi;
 using SwiftlyS2.Shared;
 using SwiftlyS2.Shared.Players;
 
@@ -14,11 +13,11 @@ internal sealed record MvpMenuPage(string Title, List<MvpMenuEntry> Entries);
 internal sealed record MvpMenuEntry(string Text, Action<IPlayer>? Action = null,
     Func<IPlayer, MvpMenuPage>? Submenu = null, bool Disabled = false, bool KeepOpen = false);
 
-public abstract class MvpMenuBase(ISwiftlyCore core, MVPConfig config, MVPCookies cookies, IAudioApi audio) : IMvpMenu
+public abstract class MvpMenuBase(ISwiftlyCore core, MVPConfig config, MVPCookies cookies,
+    Func<IPlayer, float> getVolume) : IMvpMenu
 {
     protected ISwiftlyCore Core { get; } = core;
     protected MVPConfig Config { get; } = config;
-    private readonly int[] _volumes = NormalizeVolumes(config.Menu.VolumeOptions);
     private bool _disposed;
 
     public void OpenMainMenu(IPlayer player)
@@ -44,24 +43,11 @@ public abstract class MvpMenuBase(ISwiftlyCore core, MVPConfig config, MVPCookie
         var entries = new List<MvpMenuEntry>
         {
             new(Text(player, "mvp.main_menu.active_mvp<option>", current), Disabled: true),
-            new(Text(player, "mvp.main_menu.current_volume<option>", (int)MathF.Round(Helper.ClampVolume(settings.Volume) * 100)), Disabled: true),
-            new(Text(player, "mvp.main_menu.select_mvp<option>"), Submenu: BuildSelection),
-            new(Text(player, "mvp.main_menu.change_volume<option>"), Submenu: BuildVolume)
+            new(Text(player, "mvp.main_menu.select_mvp<option>"), Submenu: BuildSelection)
         };
         if (settings.HasRandomMvp || !string.IsNullOrWhiteSpace(settings.MVPName))
             entries.Add(new(Text(player, "mvp.main_menu.remove_mvp<option>"), Submenu: BuildRemoval));
         return new(Text(player, "mvp.main_menu<title>"), entries);
-    }
-
-    private MvpMenuPage BuildVolume(IPlayer player)
-    {
-        var current = (int)MathF.Round(Helper.ClampVolume(cookies.GetPlayerSettings(player)!.Volume) * 100);
-        return new(Text(player, "mvp.main_menu.change_volume<option>"), _volumes.Select(volume =>
-        {
-            var label = Text(player, "mvp.volume_item<option>", volume);
-            if (volume == current) label += $" ({Text(player, "mvp.current")})";
-            return new MvpMenuEntry(label, p => Change(p, s => s.Volume = volume / 100f, "volume.selected", volume));
-        }).ToList());
     }
 
     private MvpMenuPage BuildSelection(IPlayer player)
@@ -108,7 +94,7 @@ public abstract class MvpMenuBase(ISwiftlyCore core, MVPConfig config, MVPCookie
             entries.Add(new(Text(player, "mvp.preview<option>"), p =>
             {
                 if (TryAccessible(p, key, out var current) && current.EnablePreview)
-                    Helper.PlaySound(audio, p, current.Sound, cookies.GetPlayerSettings(p)!.Volume);
+                    Helper.PlaySound(p, current.Sound, getVolume(p));
             }, KeepOpen: true));
         return new(Text(player, template.DisplayName), entries);
     }
@@ -135,10 +121,4 @@ public abstract class MvpMenuBase(ISwiftlyCore core, MVPConfig config, MVPCookie
     }
 
     private void Reopen(IPlayer player) => Core.Scheduler.NextTick(() => OpenMainMenu(player));
-
-    internal static int[] NormalizeVolumes(IEnumerable<int> options)
-    {
-        var values = options.Where(value => value is >= 0 and <= 100).Distinct().Order().ToArray();
-        return values.Length > 0 ? values : [0, 10, 20, 40, 60, 80, 100];
-    }
 }

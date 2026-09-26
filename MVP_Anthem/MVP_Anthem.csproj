@@ -25,12 +25,6 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<Reference Include="AudioApi">
-			<HintPath>resources/exports/AudioApi.dll</HintPath>
-		</Reference>
-	</ItemGroup>
-
-	<ItemGroup>
 		<Reference Include="Cookies.Contract">
 			<HintPath>resources/exports/Cookies.Contract.dll</HintPath>
 		</Reference>
@@ -40,6 +34,10 @@
 		<Reference Include="T3Menu.Contract">
 			<HintPath>resources/exports/T3Menu.Contract.dll</HintPath>
 		</Reference>
+		<Reference Include="Volume.Contract">
+			<HintPath>../lib/Volume.Contract.dll</HintPath>
+			<Private>false</Private>
+		</Reference>
 	</ItemGroup>
 
 	<ItemGroup>
@@ -47,19 +45,5 @@
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 		</Content>
 	</ItemGroup>
-
-	<Target Name="CopyDefaultSoundsToBuildData" AfterTargets="Build">
-		<ItemGroup>
-			<DefaultSoundFiles Include="$(MSBuildProjectDirectory)/DefaultSounds/**/*" />
-		</ItemGroup>
-
-		<RemoveDir Directories="$(PluginBuildRoot)/data/$(AssemblyName)/sounds" />
-		<MakeDir Directories="$(PluginBuildRoot)/data/$(AssemblyName)" />
-		<Copy
-			SourceFiles="@(DefaultSoundFiles)"
-			DestinationFiles="@(DefaultSoundFiles->'$(PluginBuildRoot)/data/$(AssemblyName)/%(RecursiveDir)%(Filename)%(Extension)')"
-			SkipUnchangedFiles="true"
-			Condition="'@(DefaultSoundFiles)' != ''" />
-	</Target>
 
 </Project>

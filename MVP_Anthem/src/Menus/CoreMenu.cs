@@ -1,4 +1,3 @@
-using AudioApi;
 using SwiftlyS2.Core.Menus.OptionsBase;
 using SwiftlyS2.Shared;
 using SwiftlyS2.Shared.Menus;
@@ -6,8 +5,9 @@ using SwiftlyS2.Shared.Players;
 
 namespace MVP_Anthem;
 
-public sealed class CoreMvpMenu(ISwiftlyCore core, MVPConfig config, MVPCookies cookies, IAudioApi audio)
-    : MvpMenuBase(core, config, cookies, audio)
+public sealed class CoreMvpMenu(ISwiftlyCore core, MVPConfig config, MVPCookies cookies,
+    Func<IPlayer, float> getVolume)
+    : MvpMenuBase(core, config, cookies, getVolume)
 {
     private readonly Dictionary<int, List<IMenuAPI>> _menus = [];
 
@@ -48,7 +48,11 @@ public sealed class CoreMvpMenu(ISwiftlyCore core, MVPConfig config, MVPCookies 
                 var option = new ButtonMenuOption(entry.Text, 250, 250) { CloseAfterClick = !entry.KeepOpen };
                 option.Click += (_, args) =>
                 {
-                    if (IsActive && args.Player is { IsValid: true } current) entry.Action?.Invoke(current);
+                    if (IsActive && args.Player is { IsValid: true } current)
+                        Core.Scheduler.NextTick(() =>
+                        {
+                            if (IsActive && current.IsValid) entry.Action?.Invoke(current);
+                        });
                     return ValueTask.CompletedTask;
                 };
                 builder.AddOption(option);

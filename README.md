@@ -9,13 +9,13 @@ Custom round-MVP anthems for CS2 servers running SwiftlyS2. Players can browse c
 | Dependency | Required for |
 | --- | --- |
 | SwiftlyS2 1.4.6 or newer | Running MVP Anthem |
-| [Cookies](https://github.com/SwiftlyS2-Plugins/Cookies) | Saving player selections and volume |
-| [Audio](https://github.com/SwiftlyS2-Plugins/Audio) | Audio service and MP3 playback |
+| [Cookies](https://github.com/SwiftlyS2-Plugins/Cookies) | Saving player selections |
+| [Volume.API](https://github.com/a2Labs-cc/Volume.API) | Per-player anthem volume |
 | [T3Menu by T3Marius](https://github.com/T3Marius/T3Menu) | The default `t3` menu |
 
 **Install [T3Menu](https://github.com/T3Marius/T3Menu) before MVP Anthem to use the default menu.** Follow its installation instructions, including the [required Workshop addon](https://steamcommunity.com/sharedfiles/filedetails/?id=3790988631) for players. Bundling `T3Menu.Contract.dll` does not install the T3Menu plugin.
 
-The built-in SwiftlyS2 menu is also available with `MenuType: "core"`. If T3Menu is unavailable, MVP Anthem logs a warning and falls back to Core. Cookies and Audio are required for either menu.
+The built-in SwiftlyS2 menu is also available with `MenuType: "core"`. If T3Menu is unavailable, MVP Anthem logs a warning and falls back to Core. Cookies is required for either menu.
 
 ## Installation
 
@@ -25,8 +25,6 @@ The built-in SwiftlyS2 menu is also available with `MenuType: "core"`. If T3Menu
 4. Start the server to generate `config.jsonc`.
 5. Configure your anthems and menu, then reload MVP Anthem or restart the server.
 
-The archive includes `flawless.mp3` and `florinsalam.mp3` in `data/MVP_Anthem/`. Keep existing configuration and custom sound files when upgrading.
-
 ## Player features
 
 - Category browsing with only accessible anthems shown.
@@ -34,7 +32,7 @@ The archive includes `flawless.mp3` and `florinsalam.mp3` in `data/MVP_Anthem/`.
 - Persistent volume per listener, including mute at 0%.
 - Access control through permission flags or SteamID64.
 - Localized menus, chat announcements, and center-HTML messages.
-- MP3 files and named game sound events.
+- Native CS2 named game sound events.
 
 Use `!mvp` to open the menu. Command aliases are configured in `Main.Settings.MVPCommands`.
 
@@ -47,19 +45,19 @@ Set `Main.Settings.MenuType` in `config.jsonc`:
 | `"t3"` (default) | [T3Menu](https://github.com/T3Marius/T3Menu) | Navigation, style, and sounds come from T3Menu |
 | `"core"` | SwiftlyS2 built-in menu | Uses the freeze, sound, and gradient settings under `Main.Menu` |
 
-Both menus use the same selection, preview, volume, and permission logic. Permissions are checked again when selecting or previewing an anthem.
+Both menus use the same selection, preview, and permission logic. Permissions are checked again when selecting or previewing an anthem. Listening volume is managed by Volume.API through its `!volume` and `!vol` commands.
 
 ## Configuration
 
 Configuration lives under `Main` in `config.jsonc`.
 
-### General settings — `Main.Settings`
+### General settings ï¿½ `Main.Settings`
 
 | Setting | Default | Purpose |
 | --- | --- | --- |
 | `MenuType` | `"t3"` | Select `t3` or `core` |
 | `MVPCommands` | `["mvp"]` | Menu command aliases |
-| `DefaultVolume` | `0.2` | Initial listening volume, from 0 to 1 |
+| `DefaultVolume` | `0.2` | Fallback listening volume when Volume.API is unavailable |
 | `GiveRandomMVPOnFirstConnect` | `true` | Assign an accessible anthem on first join |
 | `MVPMaxDuration` | `10` | Duration of the center-HTML announcement, in seconds |
 | `RemovePlayerInGameMvp` | `true` | Reset the MVP player's native MVP and music-kit MVP counters |
@@ -67,16 +65,15 @@ Configuration lives under `Main` in `config.jsonc`.
 
 `GiveRandomMVPOnFirstJoin` remains an alias for `GiveRandomMVPOnFirstConnect`; configure one of them. `MenuTypes` is retained for compatibility, but `MenuType` controls the menu. `ShakePlayerScreen` is currently unused.
 
-### Menu settings — `Main.Menu`
+### Menu settings ï¿½ `Main.Menu`
 
 | Setting | Default | Applies to |
 | --- | --- | --- |
-| `VolumeOptions` | `[0,10,20,40,60,80,100]` | Both menus; percentages from 0 to 100 |
 | `FreezePlayer` | `true` | Core menu |
 | `EnableSounds` | `true` | Core menu |
 | `GradientTitleColor` | `true` | Core menu |
 
-### Anthems — `Main.MVPs`
+### Anthems ï¿½ `Main.MVPs`
 
 Each category contains anthem IDs and their settings. Keep anthem IDs unique across categories; saved selections use these IDs.
 
@@ -85,7 +82,7 @@ Each category contains anthem IDs and their settings. Keep anthem IDs unique acr
   "category.public_mvp": {
     "mvp_1": {
       "DisplayName": "mvp_1.name",
-      "Sound": "flawless.mp3",
+      "Sound": "Weapon_AK47.Single",
       "EnablePreview": true,
       "ShowHtml": true,
       "ShowChat": true,
@@ -98,7 +95,7 @@ Each category contains anthem IDs and their settings. Keep anthem IDs unique acr
 | Field | Purpose |
 | --- | --- |
 | `DisplayName` | Translation key for the anthem's name |
-| `Sound` | MP3 path or a named game sound event |
+| `Sound` | Named CS2 game sound event |
 | `EnablePreview` | Show the private preview action |
 | `ShowHtml` / `ShowChat` | Enable round-MVP announcements |
 | `Permissions` | Allowed permission flags or SteamID64 strings |
@@ -107,7 +104,7 @@ An empty permission list grants access to everyone. Otherwise, matching any entr
 
 ## Sounds and translations
 
-Place MP3s in `data/MVP_Anthem/` and use relative paths such as `"flawless.mp3"`. Absolute paths are also supported. Sounds ending in `.mp3` use Audio; other values are treated as game sound-event names, such as `"Weapon_AK47.Single"`.
+Set `Sound` to a named CS2 game sound event, such as `"Weapon_AK47.Single"`. Custom sound-event resources can be listed under `Main.Settings.SoundEventFiles` for precaching.
 
 Add translation entries for each category and anthem:
 
