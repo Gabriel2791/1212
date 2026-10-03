@@ -33,6 +33,36 @@ public sealed class MVPCookies
         Cookies.Save(settings.Player);
     }
 
+    /// <summary>
+    /// Writes a new MVP selection for an ONLINE player through the same cache the rest of
+    /// the plugin reads from, so an external source (panel/RCON) never races the Cookies
+    /// plugin's own in-memory state. This is the only safe way to update a player's MVP
+    /// cookie from outside the plugin: the Cookies API only accepts a live IPlayer handle
+    /// (no offline/steamid write path), so a direct database write bypasses this cache and
+    /// gets silently overwritten the next time MVPCookies persists from memory (e.g. on
+    /// disconnect or a later selection) or simply never shows up in-game because the cached
+    /// PlayerSettings object the plugin is holding was never told about it.
+    /// </summary>
+    /// <returns>false if the player is not currently connected/valid.</returns>
+    public bool TryUpdateMvpForOnlinePlayer(IPlayer player, string mvpName, string soundPath, bool hasRandomMvp = false)
+    {
+        ArgumentNullException.ThrowIfNull(player);
+        if (!player.IsValid || player.IsFakeClient) return false;
+
+        // GetPlayerSettings returns (and, if needed, first populates) the exact cached
+        // instance InitializePlayer/OnRoundMvp read from, keyed by PlayerID+SessionId.
+        var settings = GetPlayerSettings(player);
+        if (settings == null) return false;
+
+        settings.MVPName = mvpName ?? string.Empty;
+        settings.SoundPath = soundPath ?? string.Empty;
+        settings.HasRandomMvp = hasRandomMvp;
+        settings.HadFirstConnect = true;
+
+        SavePlayerSettings(settings);
+        return true;
+    }
+
     public PlayerSettings? GetPlayerSettings(IPlayer player)
     {
         ArgumentNullException.ThrowIfNull(player);
