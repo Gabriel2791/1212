@@ -144,7 +144,7 @@ public sealed class Main(ISwiftlyCore core) : BasePlugin(core)
 
         if (!Core.Command.IsCommandRegistered(ExternalSetCookieCommand))
         {
-            var guid = Core.Command.RegisterCommand(ExternalSetCookieCommand, OnExternalSetCookie);
+            var guid = Core.Command.RegisterCommand(ExternalSetCookieCommand, OnExternalSetCookie, registerRaw: true);
             _commandIds.Add(guid);
         }
     }
