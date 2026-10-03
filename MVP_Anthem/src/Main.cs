@@ -28,6 +28,10 @@ public sealed class Main(ISwiftlyCore core) : BasePlugin(core)
     private const string PlayerCookiesInterfaceKeyLegacy = "Cookies.Player.V1";
     private const string VolumeInterfaceKey = "Volume.Player.v1";
     private const string VolumeFeatureKey = "MVP_Anthem";
+    // Console/RCON-only: lets an external panel set a player's MVP cookie without racing
+    // the plugin's own cache (see MVPCookies.TryUpdateMvpForOnlinePlayer for why a direct
+    // database write is unsafe). Usage: mvp_setcookie <steamid64> <mvpName>
+    private const string ExternalSetCookieCommand = "mvp_setcookie";
 
     private ServiceProvider? _provider;
     public static new ISwiftlyCore Core { get; set; } = null!;
@@ -42,6 +46,14 @@ public sealed class Main(ISwiftlyCore core) : BasePlugin(core)
     private IPlayerVolumeAPI? _runtimeVolume;
     private IT3Menu? _runtimeMenu;
     private List<Guid> _commandIds { get; } = [];
+
+    // Queue for mvp_setcookie requests aimed at a currently-offline player. Applied the
+    // moment that SteamID connects (see InitializePlayer), so the panel doesn't need to
+    // retry or know when the player comes online. Lock guards against the RCON command
+    // and the connect game-event firing on different threads.
+    private readonly object _pendingExternalSetsLock = new();
+    private readonly Dictionary<ulong, PendingMvpSet> _pendingExternalSets = [];
+    private readonly record struct PendingMvpSet(string MvpName, string SoundPath);
 
     public override void UseSharedInterface(IInterfaceManager interfaceManager)
     {
@@ -128,6 +140,12 @@ public sealed class Main(ISwiftlyCore core) : BasePlugin(core)
                 var guid = Core.Command.RegisterCommand(cmd, OnMvpCommand);
                 _commandIds.Add(guid);
             }
+        }
+
+        if (!Core.Command.IsCommandRegistered(ExternalSetCookieCommand))
+        {
+            var guid = Core.Command.RegisterCommand(ExternalSetCookieCommand, OnExternalSetCookie);
+            _commandIds.Add(guid);
         }
     }
 
@@ -244,6 +262,22 @@ public sealed class Main(ISwiftlyCore core) : BasePlugin(core)
                     shouldSave = true;
                 }
             }
+        }
+
+        PendingMvpSet? pending = null;
+        lock (_pendingExternalSetsLock)
+        {
+            if (_pendingExternalSets.Remove(player.SteamID, out var found))
+                pending = found;
+        }
+
+        if (pending is { } p)
+        {
+            settings.MVPName = p.MvpName;
+            settings.SoundPath = p.SoundPath;
+            settings.HasRandomMvp = false;
+            settings.HadFirstConnect = true;
+            shouldSave = true;
         }
 
         if (shouldSave)
@@ -376,6 +410,7 @@ public sealed class Main(ISwiftlyCore core) : BasePlugin(core)
         Menu = null;
         Helper.Reset();
         mvpCookies = null;
+        lock (_pendingExternalSetsLock) { _pendingExternalSets.Clear(); }
         _provider?.Dispose();
         _provider = null;
     }
@@ -415,6 +450,70 @@ public sealed class Main(ISwiftlyCore core) : BasePlugin(core)
         }
 
         Menu.OpenMainMenu(player);
+    }
+
+    // Console/RCON only. mvp_setcookie <steamid64> <mvpName>
+    // Writes through mvpCookies.TryUpdateMvpForOnlinePlayer so the panel never races
+    // the plugin's own in-memory cache (see MVPCookies.cs). If the player is offline,
+    // queues the request for InitializePlayer to apply on next connect.
+    private void OnExternalSetCookie(ICommandContext context)
+    {
+        if (context.IsSentByPlayer)
+        {
+            context.Reply("mvp_setcookie is console/RCON only.");
+            return;
+        }
+
+        if (mvpCookies is null)
+        {
+            context.Reply("MVP_Anthem is not ready: cookies interface unavailable.");
+            return;
+        }
+
+        if (context.Args.Length < 2)
+        {
+            context.Reply("Usage: mvp_setcookie <steamid64> <mvpName>");
+            return;
+        }
+
+        if (!ulong.TryParse(context.Args[0], out var steamId))
+        {
+            context.Reply($"Invalid steamid64: {context.Args[0]}");
+            return;
+        }
+
+        var mvpName = context.Args[1];
+        if (!Helper.TryGetMvpTemplate(Config, mvpName, out _))
+        {
+            context.Reply($"Unknown MVP: {mvpName}");
+            return;
+        }
+
+        var soundPath = Helper.GetSoundPath(Config, mvpName);
+
+        var targetPlayer = Core.PlayerManager.GetAllValidPlayers()
+            .FirstOrDefault(p => !p.IsFakeClient && p.SteamID == steamId);
+
+        if (targetPlayer is null)
+        {
+            // Not connected right now: queue it. InitializePlayer applies it the moment
+            // this SteamID connects (EventPlayerConnectFull), so the panel can fire this
+            // once and not worry about retries or timing.
+            lock (_pendingExternalSetsLock)
+            {
+                _pendingExternalSets[steamId] = new PendingMvpSet(mvpName, soundPath);
+            }
+            context.Reply($"Player {steamId} is offline. Queued {mvpName} -> will apply on next connect.");
+            return;
+        }
+
+        Core.Scheduler.NextTick(() =>
+        {
+            var ok = mvpCookies.TryUpdateMvpForOnlinePlayer(targetPlayer, mvpName, soundPath);
+            context.Reply(ok
+                ? $"Updated MVP cookie for {steamId} -> {mvpName}"
+                : $"Failed to update MVP cookie for {steamId}: player disconnected before the update ran.");
+        });
     }
     [EventListener<EventDelegates.OnTick>]
     public void OnTick()
